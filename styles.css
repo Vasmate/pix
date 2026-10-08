@@ -1,0 +1,182 @@
+:root {
+    --bg-color: #0b0c10;
+    --card-bg: rgba(31, 40, 51, 0.6);
+    --neon-blue: #45a29e;
+    --neon-cyan: #66fcf1;
+    --text-color: #c5c6c7;
+    --border-radius: 16px;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-style: italic; /* Requested by user */
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-image: 
+        radial-gradient(circle at 15% 50%, rgba(69, 162, 158, 0.08), transparent 25%),
+        radial-gradient(circle at 85% 30%, rgba(102, 252, 241, 0.08), transparent 25%);
+}
+
+.glass-container {
+    width: 100%;
+    max-width: 800px;
+    padding: 2rem;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 3rem;
+    position: relative;
+}
+
+.install-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    padding: 0.5rem 1.2rem;
+    background: var(--neon-cyan);
+    color: var(--bg-color);
+    border: none;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: bold;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    box-shadow: 0 0 12px rgba(102, 252, 241, 0.5);
+    animation: pulse-glow 2s ease-in-out infinite;
+    z-index: 10;
+}
+
+.install-btn:hover {
+    box-shadow: 0 0 20px var(--neon-cyan), 0 0 40px var(--neon-cyan);
+}
+
+@keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 12px rgba(102, 252, 241, 0.5); }
+    50% { box-shadow: 0 0 20px rgba(102, 252, 241, 0.8); }
+}
+
+.logo {
+    font-size: 4rem;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 10px rgba(102, 252, 241, 0.5), 0 0 20px rgba(102, 252, 241, 0.3);
+    margin-bottom: 0.5rem;
+    letter-spacing: 2px;
+}
+
+.subtitle {
+    color: var(--neon-blue);
+    font-size: 1.2rem;
+    opacity: 0.8;
+}
+
+main {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.card {
+    background: var(--card-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(102, 252, 241, 0.1);
+    border-radius: var(--border-radius);
+    padding: 2rem;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 40px 0 rgba(102, 252, 241, 0.15);
+    border-color: rgba(102, 252, 241, 0.3);
+}
+
+h2 {
+    color: #fff;
+    margin-bottom: 1rem;
+    font-size: 1.8rem;
+    border-bottom: 1px solid rgba(102, 252, 241, 0.2);
+    padding-bottom: 0.5rem;
+}
+
+p {
+    margin-bottom: 1.5rem;
+    line-height: 1.6;
+}
+
+.input-group {
+    margin-bottom: 1.5rem;
+}
+
+input[type="text"] {
+    width: 100%;
+    padding: 1rem;
+    background: rgba(11, 12, 16, 0.8);
+    border: 1px solid var(--neon-blue);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+input[type="text"]:focus {
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 8px rgba(102, 252, 241, 0.4);
+}
+
+.neon-btn {
+    display: inline-block;
+    padding: 0.8rem 2rem;
+    background: transparent;
+    color: var(--neon-cyan);
+    border: 2px solid var(--neon-cyan);
+    border-radius: 30px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    text-decoration: none;
+    text-align: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 10px rgba(102, 252, 241, 0.2) inset;
+}
+
+.neon-btn:hover {
+    background: var(--neon-cyan);
+    color: var(--bg-color);
+    box-shadow: 0 0 15px var(--neon-cyan), 0 0 30px var(--neon-cyan);
+}
+
+.action-btn {
+    width: 100%;
+}
+
+.hidden {
+    display: none !important;
+}
+
+#wp-preview-container, #tk-result {
+    margin-top: 1.5rem;
+    text-align: center;
+}
+
+#wp-status, #tk-status {
+    margin-bottom: 1rem;
+    color: var(--neon-blue);
+    font-weight: bold;
+}

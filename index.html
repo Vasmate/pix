@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pix</title>
+    <!-- COI Service Worker for FFmpeg.wasm SharedArrayBuffer support -->
+    <script src="coi-serviceworker.min.js"></script>
+    
+    <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0d0d12">
+    
+    <!-- FFmpeg.wasm v0.12 scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.7/dist/umd/ffmpeg.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
+</head>
+<body>
+    <div class="glass-container">
+        <header>
+            <button id="install-btn" class="install-btn hidden">Install App</button>
+            <h1 class="logo">Pix</h1>
+            <p class="subtitle">Next-gen media processing</p>
+        </header>
+
+        <main>
+            <section class="card" id="whatsapp-section">
+                <h2>WhatsApp High-Quality Export</h2>
+                <p>Process your videos for WhatsApp status without losing quality (Runs 100% offline in your browser).</p>
+                <div class="input-group">
+                    <label for="media-upload" class="neon-btn">Select Video</label>
+                    <input type="file" id="media-upload" accept="video/*" hidden>
+                </div>
+                <div id="wp-preview-container" class="hidden">
+                    <p id="wp-status"></p>
+                    <p id="wp-progress"></p>
+                    <button id="process-wp-btn" class="neon-btn action-btn">Process & Optimize</button>
+                    <div id="wp-result" class="hidden">
+                        <a id="wp-download-link" class="neon-btn action-btn" download>Download Optimized Media</a>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card" id="tiktok-section">
+                <h2>TikTok Downloader</h2>
+                <p>Download TikTok videos without watermarks.</p>
+                <div class="input-group">
+                    <input type="text" id="tiktok-url" placeholder="Paste TikTok URL here...">
+                </div>
+                <button id="download-tiktok-btn" class="neon-btn action-btn">Download</button>
+                <div id="tk-result" class="hidden">
+                    <p id="tk-status"></p>
+                    <a id="tk-download-link" class="neon-btn action-btn" download>Save Video</a>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
