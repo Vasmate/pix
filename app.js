@@ -1,101 +1,22 @@
+const { FFmpeg } = FFmpegWASM;
+const { fetchFile } = FFmpegUtil;
+
+let ffmpeg = null;
 let lastOptimizedBlob = null;
 let lastOptimizedFileName = '';
 
-// ---------- Video compression via Canvas + MediaRecorder (works everywhere) ----------
-function compressVideo(file, onProgress) {
-    return new Promise((resolve, reject) => {
-        const video = document.createElement('video');
-        video.muted = true;
-        video.playsInline = true;
-        const url = URL.createObjectURL(file);
-        video.src = url;
-
-        video.onloadedmetadata = () => {
-            let width = video.videoWidth;
-            let height = video.videoHeight;
-            const maxH = 480;
-            if (height > maxH) {
-                const ratio = maxH / height;
-                width = Math.round(width * ratio);
-                height = maxH;
-            }
-            width = width % 2 === 0 ? width : width + 1;
-            height = height % 2 === 0 ? height : height + 1;
-
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-
-            const stream = canvas.captureStream(30);
-
-            // Try to capture audio
-            try {
-                const audioCtx = new AudioContext();
-                const source = audioCtx.createMediaElementSource(video);
-                const dest = audioCtx.createMediaStreamDestination();
-                source.connect(dest);
-                source.connect(audioCtx.destination);
-                dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
-            } catch (e) {
-                console.warn('Audio capture not supported:', e);
-            }
-
-            let mimeType = 'video/webm';
-            if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
-                mimeType = 'video/webm;codecs=vp9';
-            } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8')) {
-                mimeType = 'video/webm;codecs=vp8';
-            } else if (MediaRecorder.isTypeSupported('video/mp4')) {
-                mimeType = 'video/mp4';
-            }
-
-            const recorder = new MediaRecorder(stream, {
-                mimeType,
-                videoBitsPerSecond: 1000000
-            });
-
-            const chunks = [];
-            recorder.ondataavailable = (e) => {
-                if (e.data.size > 0) chunks.push(e.data);
-            };
-
-            recorder.onstop = () => {
-                URL.revokeObjectURL(url);
-                const isMP4 = mimeType.includes('mp4');
-                const blob = new Blob(chunks, { type: isMP4 ? 'video/mp4' : 'video/webm' });
-                resolve({ blob, extension: isMP4 ? 'mp4' : 'webm' });
-            };
-
-            recorder.onerror = (e) => {
-                URL.revokeObjectURL(url);
-                reject(new Error('Recording failed'));
-            };
-
-            const duration = video.duration;
-            recorder.start(100);
-
-            function drawFrame() {
-                if (video.ended || video.paused) {
-                    recorder.stop();
-                    return;
-                }
-                ctx.drawImage(video, 0, 0, width, height);
-                if (onProgress && duration) {
-                    onProgress(video.currentTime / duration);
-                }
-                requestAnimationFrame(drawFrame);
-            }
-
-            video.onended = () => recorder.stop();
-            video.play().then(drawFrame).catch(reject);
-        };
-
-        video.onerror = () => {
-            URL.revokeObjectURL(url);
-            reject(new Error('Could not load video file'));
-        };
+async function loadFFmpeg() {
+    if (ffmpeg) return ffmpeg;
+    ffmpeg = new FFmpeg();
+    ffmpeg.on('progress', ({ progress }) => {
+        const wpProgress = document.getElementById('wp-progress');
+        wpProgress.textContent = `Processing: ${Math.round(progress * 100)}%`;
     });
+    await ffmpeg.load({
+        coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
+        wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm',
+    });
+    return ffmpeg;
 }
 
 // ---------- Image optimization using Canvas ----------
@@ -219,16 +140,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             if (isVideo) {
-                wpStatus.textContent = 'Optimizing video...';
-                wpProgress.textContent = 'Starting...';
+                wpStatus.textContent = 'Loading video engine (first time may take a moment)...';
+                wpProgress.textContent = '';
 
-                const result = await compressVideo(selectedFile, (progress) => {
-                    wpProgress.textContent = `Processing: ${Math.round(progress * 100)}%`;
-                });
+                const ff = await loadFFmpeg();
 
-                lastOptimizedBlob = result.blob;
-                const baseName = selectedFile.name.replace(/\.[^.]+$/, '');
-                lastOptimizedFileName = `Pics_Optimized_${baseName}.${result.extension}`;
+                wpStatus.textContent = 'Reading file...';
+                const inputName = 'input.mp4';
+                const outputName = 'output.mp4';
+                await ff.writeFile(inputName, await fetchFile(selectedFile));
+
+                wpStatus.textContent = 'Optimizing for WhatsApp...';
+                await ff.exec([
+                    '-i', inputName,
+                    '-vf', "scale=-2:'min(720,ih)'",
+                    '-c:v', 'libx264',
+                    '-b:v', '1500k',
+                    '-maxrate', '1500k',
+                    '-bufsize', '3000k',
+                    '-preset', 'ultrafast',
+                    '-c:a', 'aac',
+                    '-b:a', '128k',
+                    outputName
+                ]);
+
+                const data = await ff.readFile(outputName);
+                lastOptimizedBlob = new Blob([data.buffer], { type: 'video/mp4' });
+                lastOptimizedFileName = `Pics_Optimized_${selectedFile.name}`;
 
                 const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                 const originalMB = (selectedFile.size / (1024 * 1024)).toFixed(1);
@@ -236,10 +174,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 wpStatus.textContent = `Video optimized in ${elapsed}s! ${originalMB}MB → ${newMB}MB`;
                 wpProgress.textContent = '';
-
                 wpDownloadLink.href = URL.createObjectURL(lastOptimizedBlob);
                 wpDownloadLink.download = lastOptimizedFileName;
                 wpResult.classList.remove('hidden');
+
+                await ff.deleteFile(inputName);
+                await ff.deleteFile(outputName);
 
             } else {
                 wpStatus.textContent = 'Optimizing photo...';
@@ -260,7 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error(error);
-            wpStatus.textContent = 'Error during optimization. Try a smaller file or refresh the page.';
+            wpStatus.textContent = 'Error during optimization. Try refreshing the page or use Chrome/Edge on desktop.';
             wpProgress.textContent = '';
         } finally {
             processWpBtn.classList.remove('hidden');

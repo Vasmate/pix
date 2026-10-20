@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pix-cache-v2';
+const CACHE_NAME = 'pix-cache-v3';
 const urlsToCache = [
   './',
   './index.html',
