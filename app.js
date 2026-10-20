@@ -1,41 +1,8 @@
-let ffmpeg = null;
-let ffmpegAvailable = null; // null = unknown, true/false after check
 let lastOptimizedBlob = null;
 let lastOptimizedFileName = '';
 
-// ---------- Check if SharedArrayBuffer is available (needed for FFmpeg.wasm) ----------
-function checkSharedArrayBuffer() {
-    try {
-        new SharedArrayBuffer(1);
-        return true;
-    } catch {
-        return false;
-    }
-}
-
-// ---------- FFmpeg.wasm loader ----------
-async function loadFFmpeg() {
-    if (ffmpeg) return ffmpeg;
-
-    const { FFmpeg } = FFmpegWASM;
-    const { fetchFile } = FFmpegUtil;
-
-    ffmpeg = new FFmpeg();
-    ffmpeg.on('progress', ({ progress }) => {
-        const wpProgress = document.getElementById('wp-progress');
-        wpProgress.textContent = `Processing: ${Math.round(progress * 100)}%`;
-    });
-
-    await ffmpeg.load({
-        coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
-        wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm',
-    });
-
-    return ffmpeg;
-}
-
-// ---------- Video compression via Canvas + MediaRecorder (no FFmpeg needed) ----------
-function compressVideoNative(file, onProgress) {
+// ---------- Video compression via Canvas + MediaRecorder (works everywhere) ----------
+function compressVideo(file, onProgress) {
     return new Promise((resolve, reject) => {
         const video = document.createElement('video');
         video.muted = true;
@@ -44,7 +11,6 @@ function compressVideoNative(file, onProgress) {
         video.src = url;
 
         video.onloadedmetadata = () => {
-            // Target: scale down to max 480p
             let width = video.videoWidth;
             let height = video.videoHeight;
             const maxH = 480;
@@ -53,7 +19,6 @@ function compressVideoNative(file, onProgress) {
                 width = Math.round(width * ratio);
                 height = maxH;
             }
-            // Ensure even dimensions
             width = width % 2 === 0 ? width : width + 1;
             height = height % 2 === 0 ? height : height + 1;
 
@@ -62,10 +27,9 @@ function compressVideoNative(file, onProgress) {
             canvas.height = height;
             const ctx = canvas.getContext('2d');
 
-            // Set up MediaRecorder
             const stream = canvas.captureStream(30);
 
-            // Try to capture audio too
+            // Try to capture audio
             try {
                 const audioCtx = new AudioContext();
                 const source = audioCtx.createMediaElementSource(video);
@@ -74,21 +38,21 @@ function compressVideoNative(file, onProgress) {
                 source.connect(audioCtx.destination);
                 dest.stream.getAudioTracks().forEach(t => stream.addTrack(t));
             } catch (e) {
-                console.warn('Could not capture audio:', e);
+                console.warn('Audio capture not supported:', e);
             }
 
-            // Pick best supported format
-            let mimeType = 'video/webm;codecs=vp8';
+            let mimeType = 'video/webm';
             if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
                 mimeType = 'video/webm;codecs=vp9';
-            }
-            if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')) {
-                mimeType = 'video/mp4;codecs=avc1';
+            } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8')) {
+                mimeType = 'video/webm;codecs=vp8';
+            } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+                mimeType = 'video/mp4';
             }
 
             const recorder = new MediaRecorder(stream, {
                 mimeType,
-                videoBitsPerSecond: 1000000 // 1 Mbps
+                videoBitsPerSecond: 1000000
             });
 
             const chunks = [];
@@ -98,17 +62,16 @@ function compressVideoNative(file, onProgress) {
 
             recorder.onstop = () => {
                 URL.revokeObjectURL(url);
-                const outputType = mimeType.startsWith('video/mp4') ? 'video/mp4' : 'video/webm';
-                const blob = new Blob(chunks, { type: outputType });
-                resolve({ blob, extension: outputType === 'video/mp4' ? 'mp4' : 'webm' });
+                const isMP4 = mimeType.includes('mp4');
+                const blob = new Blob(chunks, { type: isMP4 ? 'video/mp4' : 'video/webm' });
+                resolve({ blob, extension: isMP4 ? 'mp4' : 'webm' });
             };
 
             recorder.onerror = (e) => {
                 URL.revokeObjectURL(url);
-                reject(new Error('Recording failed: ' + e.error));
+                reject(new Error('Recording failed'));
             };
 
-            // Draw frames
             const duration = video.duration;
             recorder.start(100);
 
@@ -124,13 +87,8 @@ function compressVideoNative(file, onProgress) {
                 requestAnimationFrame(drawFrame);
             }
 
-            video.onended = () => {
-                recorder.stop();
-            };
-
-            video.play().then(() => {
-                drawFrame();
-            }).catch(reject);
+            video.onended = () => recorder.stop();
+            video.play().then(drawFrame).catch(reject);
         };
 
         video.onerror = () => {
@@ -163,10 +121,7 @@ function optimizeImage(file, maxWidth, maxHeight, quality) {
             ctx.drawImage(img, 0, 0, width, height);
 
             canvas.toBlob(
-                (blob) => {
-                    if (blob) resolve(blob);
-                    else reject(new Error('Failed to compress image'));
-                },
+                (blob) => blob ? resolve(blob) : reject(new Error('Failed to compress image')),
                 'image/jpeg',
                 quality
             );
@@ -181,44 +136,34 @@ function optimizeImage(file, maxWidth, maxHeight, quality) {
     });
 }
 
-// ---------- Share to WhatsApp via Web Share API ----------
+// ---------- Share via Web Share API ----------
 async function shareToWhatsApp(blob, fileName) {
     const file = new File([blob], fileName, { type: blob.type });
 
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
-            await navigator.share({
-                files: [file],
-                title: 'Pics Optimized Media',
-                text: 'Optimized with Pics'
-            });
+            await navigator.share({ files: [file], title: 'Pics Optimized Media' });
             return true;
         } catch (err) {
             if (err.name !== 'AbortError') console.error('Share failed:', err);
             return false;
         }
     } else {
-        alert('Direct sharing is not supported on this browser. Please download the file and share it manually.');
+        alert('Direct sharing is not supported on this browser. Please download the file and share manually.');
         return false;
     }
 }
 
 // ==========================================================
-// Main App
-// ==========================================================
 document.addEventListener('DOMContentLoaded', () => {
-    // Check FFmpeg.wasm support
-    ffmpegAvailable = checkSharedArrayBuffer();
-    console.log('SharedArrayBuffer available:', ffmpegAvailable);
-
-    // PWA Service Worker Registration
+    // PWA Service Worker
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js')
-            .then(reg => console.log('Service Worker registered', reg))
-            .catch(err => console.error('Service Worker registration failed', err));
+            .then(reg => console.log('SW registered', reg))
+            .catch(err => console.error('SW failed', err));
     }
 
-    // PWA Install Prompt
+    // PWA Install
     let deferredPrompt;
     const installBtn = document.getElementById('install-btn');
 
@@ -231,8 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
     installBtn.addEventListener('click', async () => {
         if (!deferredPrompt) return;
         deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        console.log(`Install prompt outcome: ${outcome}`);
+        await deferredPrompt.userChoice;
         deferredPrompt = null;
         installBtn.classList.add('hidden');
     });
@@ -240,10 +184,9 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('appinstalled', () => {
         installBtn.classList.add('hidden');
         deferredPrompt = null;
-        console.log('Pics PWA installed!');
     });
 
-    // WhatsApp Optimization Elements
+    // WhatsApp Elements
     const mediaUpload = document.getElementById('media-upload');
     const wpPreviewContainer = document.getElementById('wp-preview-container');
     const wpStatus = document.getElementById('wp-status');
@@ -260,8 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.files && e.target.files[0]) {
             selectedFile = e.target.files[0];
             isVideo = selectedFile.type.startsWith('video/');
-            const fileType = isVideo ? 'Video' : 'Photo';
-            wpStatus.textContent = `Selected ${fileType}: ${selectedFile.name}`;
+            wpStatus.textContent = `Selected ${isVideo ? 'Video' : 'Photo'}: ${selectedFile.name}`;
             wpProgress.textContent = '';
             wpPreviewContainer.classList.remove('hidden');
             wpResult.classList.add('hidden');
@@ -272,67 +214,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     processWpBtn.addEventListener('click', async () => {
         if (!selectedFile) return;
-
         processWpBtn.classList.add('hidden');
         const startTime = Date.now();
 
         try {
             if (isVideo) {
-                // ---- Try FFmpeg first, fallback to native ----
-                if (ffmpegAvailable) {
-                    try {
-                        wpStatus.textContent = 'Loading video engine...';
-                        wpProgress.textContent = '';
+                wpStatus.textContent = 'Optimizing video...';
+                wpProgress.textContent = 'Starting...';
 
-                        const ff = await loadFFmpeg();
-                        const { fetchFile } = FFmpegUtil;
+                const result = await compressVideo(selectedFile, (progress) => {
+                    wpProgress.textContent = `Processing: ${Math.round(progress * 100)}%`;
+                });
 
-                        wpStatus.textContent = 'Reading file...';
-                        const inputName = 'input.mp4';
-                        const outputName = 'output.mp4';
-                        await ff.writeFile(inputName, await fetchFile(selectedFile));
-
-                        wpStatus.textContent = 'Optimizing for WhatsApp (fast mode)...';
-                        await ff.exec([
-                            '-i', inputName,
-                            '-vf', "scale=-2:'min(480,ih)'",
-                            '-c:v', 'libx264',
-                            '-crf', '28',
-                            '-preset', 'ultrafast',
-                            '-tune', 'fastdecode',
-                            '-movflags', '+faststart',
-                            '-c:a', 'aac',
-                            '-b:a', '96k',
-                            '-ac', '1',
-                            outputName
-                        ]);
-
-                        const data = await ff.readFile(outputName);
-                        lastOptimizedBlob = new Blob([data.buffer], { type: 'video/mp4' });
-                        lastOptimizedFileName = `Pics_Optimized_${selectedFile.name}`;
-
-                        await ff.deleteFile(inputName);
-                        await ff.deleteFile(outputName);
-                    } catch (ffErr) {
-                        console.warn('FFmpeg failed, falling back to native compression:', ffErr);
-                        ffmpegAvailable = false;
-                        // Fall through to native method below
-                    }
-                }
-
-                if (!ffmpegAvailable || !lastOptimizedBlob) {
-                    // ---- Native browser compression (works everywhere) ----
-                    wpStatus.textContent = 'Optimizing video...';
-                    wpProgress.textContent = 'Playing through video for compression...';
-
-                    const result = await compressVideoNative(selectedFile, (progress) => {
-                        wpProgress.textContent = `Processing: ${Math.round(progress * 100)}%`;
-                    });
-
-                    lastOptimizedBlob = result.blob;
-                    const baseName = selectedFile.name.replace(/\.[^.]+$/, '');
-                    lastOptimizedFileName = `Pics_Optimized_${baseName}.${result.extension}`;
-                }
+                lastOptimizedBlob = result.blob;
+                const baseName = selectedFile.name.replace(/\.[^.]+$/, '');
+                lastOptimizedFileName = `Pics_Optimized_${baseName}.${result.extension}`;
 
                 const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                 const originalMB = (selectedFile.size / (1024 * 1024)).toFixed(1);
@@ -341,29 +237,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 wpStatus.textContent = `Video optimized in ${elapsed}s! ${originalMB}MB → ${newMB}MB`;
                 wpProgress.textContent = '';
 
-                const dlUrl = URL.createObjectURL(lastOptimizedBlob);
-                wpDownloadLink.href = dlUrl;
+                wpDownloadLink.href = URL.createObjectURL(lastOptimizedBlob);
                 wpDownloadLink.download = lastOptimizedFileName;
                 wpResult.classList.remove('hidden');
 
             } else {
-                // ----- Image: use Canvas API -----
                 wpStatus.textContent = 'Optimizing photo...';
                 wpProgress.textContent = 'Processing...';
 
                 lastOptimizedBlob = await optimizeImage(selectedFile, 1920, 1920, 0.92);
-                const ext = selectedFile.name.lastIndexOf('.') !== -1
-                    ? selectedFile.name.substring(0, selectedFile.name.lastIndexOf('.'))
-                    : selectedFile.name;
-                lastOptimizedFileName = `Pics_Optimized_${ext}.jpg`;
+                const baseName = selectedFile.name.replace(/\.[^.]+$/, '');
+                lastOptimizedFileName = `Pics_Optimized_${baseName}.jpg`;
 
-                const url = URL.createObjectURL(lastOptimizedBlob);
                 const originalKB = Math.round(selectedFile.size / 1024);
                 const newKB = Math.round(lastOptimizedBlob.size / 1024);
 
                 wpStatus.textContent = `Photo optimized! ${originalKB}KB → ${newKB}KB`;
                 wpProgress.textContent = '';
-                wpDownloadLink.href = url;
+                wpDownloadLink.href = URL.createObjectURL(lastOptimizedBlob);
                 wpDownloadLink.download = lastOptimizedFileName;
                 wpResult.classList.remove('hidden');
             }
@@ -376,7 +267,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Share to WhatsApp button
     wpShareBtn.addEventListener('click', async () => {
         if (!lastOptimizedBlob) return;
         wpShareBtn.textContent = 'Opening share...';
@@ -384,7 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
         wpShareBtn.textContent = 'Share to WhatsApp';
     });
 
-    // TikTok Downloader Elements
+    // TikTok Downloader
     const tiktokUrlInput = document.getElementById('tiktok-url');
     const downloadTiktokBtn = document.getElementById('download-tiktok-btn');
     const tkResult = document.getElementById('tk-result');
@@ -395,7 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const url = tiktokUrlInput.value.trim();
         if (!url) return;
 
-        tkStatus.textContent = 'Fetching video from public API...';
+        tkStatus.textContent = 'Fetching video...';
         tkResult.classList.remove('hidden');
         tkDownloadLink.classList.add('hidden');
         downloadTiktokBtn.disabled = true;
@@ -403,20 +293,15 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
             const json = await response.json();
-
-            if (json.code !== 0) throw new Error('Could not fetch video. Invalid URL or API limits.');
+            if (json.code !== 0) throw new Error('Invalid URL');
 
             const videoUrl = json.data.play;
-            tkStatus.textContent = 'Preparing direct download link...';
-
             try {
                 const vidResponse = await fetch(videoUrl);
                 const blob = await vidResponse.blob();
-                const blobUrl = URL.createObjectURL(blob);
-                tkDownloadLink.href = blobUrl;
+                tkDownloadLink.href = URL.createObjectURL(blob);
                 tkDownloadLink.download = 'Pics_TikTok.mp4';
-            } catch (blobErr) {
-                console.warn('CORS blocked blob fetch, using direct link fallback');
+            } catch {
                 tkDownloadLink.href = videoUrl;
                 tkDownloadLink.target = '_blank';
                 tkDownloadLink.removeAttribute('download');
@@ -426,7 +311,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tkDownloadLink.classList.remove('hidden');
         } catch (error) {
             console.error(error);
-            tkStatus.textContent = 'Failed to fetch video. Ensure the URL is correct.';
+            tkStatus.textContent = 'Failed to fetch video. Check the URL and try again.';
         } finally {
             downloadTiktokBtn.disabled = false;
         }
