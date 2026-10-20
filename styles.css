@@ -394,3 +394,21 @@ header {
     background: var(--accent);
     color: #fff;
 }
+
+/* ---------- Share Button ---------- */
+.share-btn {
+    background: linear-gradient(135deg, #25d366, #128c7e) !important;
+    box-shadow: 0 4px 16px -4px rgba(37, 211, 102, 0.35) !important;
+    margin-left: 0.5rem;
+}
+
+.share-btn:hover {
+    box-shadow: 0 8px 24px -4px rgba(37, 211, 102, 0.45) !important;
+}
+
+#wp-result, #tk-result {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+}

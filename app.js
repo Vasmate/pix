@@ -2,15 +2,17 @@ const { FFmpeg } = FFmpegWASM;
 const { fetchFile } = FFmpegUtil;
 
 let ffmpeg = null;
+let lastOptimizedBlob = null;
+let lastOptimizedFileName = '';
 
 async function loadFFmpeg() {
     if (ffmpeg) return ffmpeg;
     ffmpeg = new FFmpeg();
     ffmpeg.on('progress', ({ progress }) => {
         const wpProgress = document.getElementById('wp-progress');
-        wpProgress.textContent = `Processing: ${Math.round(progress * 100)}%`;
+        const pct = Math.round(progress * 100);
+        wpProgress.textContent = `Processing: ${pct}%`;
     });
-    // Load ffmpeg.wasm from CDN
     await ffmpeg.load({
         coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
         wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm',
@@ -26,10 +28,8 @@ function optimizeImage(file, maxWidth, maxHeight, quality) {
 
         img.onload = () => {
             URL.revokeObjectURL(url);
-
             let { width, height } = img;
 
-            // Scale down if larger than max dimensions
             if (width > maxWidth || height > maxHeight) {
                 const ratio = Math.min(maxWidth / width, maxHeight / height);
                 width = Math.round(width * ratio);
@@ -59,6 +59,31 @@ function optimizeImage(file, maxWidth, maxHeight, quality) {
 
         img.src = url;
     });
+}
+
+// ---------- Share to WhatsApp via Web Share API ----------
+async function shareToWhatsApp(blob, fileName) {
+    const file = new File([blob], fileName, { type: blob.type });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+            await navigator.share({
+                files: [file],
+                title: 'Pics Optimized Media',
+                text: 'Optimized with Pics'
+            });
+            return true;
+        } catch (err) {
+            if (err.name !== 'AbortError') {
+                console.error('Share failed:', err);
+            }
+            return false;
+        }
+    } else {
+        // Fallback: open WhatsApp web
+        alert('Direct sharing is not supported on this browser. Please download the file and share it manually.');
+        return false;
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -102,7 +127,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const processWpBtn = document.getElementById('process-wp-btn');
     const wpResult = document.getElementById('wp-result');
     const wpDownloadLink = document.getElementById('wp-download-link');
-    
+    const wpShareBtn = document.getElementById('wp-share-btn');
+
     let selectedFile = null;
     let isVideo = false;
 
@@ -124,10 +150,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!selectedFile) return;
 
         processWpBtn.classList.add('hidden');
+        const startTime = Date.now();
 
         try {
             if (isVideo) {
-                // ----- Video: use FFmpeg.wasm -----
+                // ----- Video: use FFmpeg.wasm (fast settings) -----
                 wpStatus.textContent = 'Loading video engine (first time may take a moment)...';
                 wpProgress.textContent = '';
 
@@ -148,32 +175,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 await ff.writeFile(inputName, await fetchFile(selectedFile));
 
-                wpStatus.textContent = 'Optimizing for WhatsApp...';
+                wpStatus.textContent = 'Optimizing for WhatsApp (fast mode)...';
                 await ff.exec([
                     '-i', inputName,
-                    '-vf', "scale=-2:'min(720,ih)'",
+                    '-vf', "scale=-2:'min(480,ih)'",
                     '-c:v', 'libx264',
-                    '-b:v', '1500k',
-                    '-maxrate', '1500k',
-                    '-bufsize', '3000k',
+                    '-crf', '28',
                     '-preset', 'ultrafast',
+                    '-tune', 'fastdecode',
+                    '-movflags', '+faststart',
                     '-c:a', 'aac',
-                    '-b:a', '128k',
+                    '-b:a', '96k',
+                    '-ac', '1',
+                    '-threads', '4',
                     outputName
                 ]);
 
-                wpStatus.textContent = 'Finalizing...';
                 const data = await ff.readFile(outputName);
-                const blob = new Blob([data.buffer], { type: 'video/mp4' });
-                const url = URL.createObjectURL(blob);
+                lastOptimizedBlob = new Blob([data.buffer], { type: 'video/mp4' });
+                lastOptimizedFileName = `Pics_Optimized_${selectedFile.name}`;
 
-                wpStatus.textContent = 'Video optimization complete!';
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                const originalMB = (selectedFile.size / (1024 * 1024)).toFixed(1);
+                const newMB = (lastOptimizedBlob.size / (1024 * 1024)).toFixed(1);
+
+                wpStatus.textContent = `Video optimized in ${elapsed}s! ${originalMB}MB → ${newMB}MB`;
                 wpProgress.textContent = '';
+
+                const url = URL.createObjectURL(lastOptimizedBlob);
                 wpDownloadLink.href = url;
-                wpDownloadLink.download = `Pics_Optimized_${selectedFile.name}`;
+                wpDownloadLink.download = lastOptimizedFileName;
                 wpResult.classList.remove('hidden');
 
-                // Cleanup memory
                 await ff.deleteFile(inputName);
                 await ff.deleteFile(outputName);
 
@@ -182,21 +215,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 wpStatus.textContent = 'Optimizing photo...';
                 wpProgress.textContent = 'Processing...';
 
-                // WhatsApp optimal: max 1920px, high JPEG quality
-                const blob = await optimizeImage(selectedFile, 1920, 1920, 0.92);
+                lastOptimizedBlob = await optimizeImage(selectedFile, 1920, 1920, 0.92);
+                const ext = selectedFile.name.lastIndexOf('.') !== -1
+                    ? selectedFile.name.substring(0, selectedFile.name.lastIndexOf('.'))
+                    : selectedFile.name;
+                lastOptimizedFileName = `Pics_Optimized_${ext}.jpg`;
 
-                const url = URL.createObjectURL(blob);
+                const url = URL.createObjectURL(lastOptimizedBlob);
                 const originalKB = Math.round(selectedFile.size / 1024);
-                const newKB = Math.round(blob.size / 1024);
+                const newKB = Math.round(lastOptimizedBlob.size / 1024);
 
                 wpStatus.textContent = `Photo optimized! ${originalKB}KB → ${newKB}KB`;
                 wpProgress.textContent = '';
                 wpDownloadLink.href = url;
-
-                const ext = selectedFile.name.lastIndexOf('.') !== -1
-                    ? selectedFile.name.substring(0, selectedFile.name.lastIndexOf('.'))
-                    : selectedFile.name;
-                wpDownloadLink.download = `Pics_Optimized_${ext}.jpg`;
+                wpDownloadLink.download = lastOptimizedFileName;
                 wpResult.classList.remove('hidden');
             }
         } catch (error) {
@@ -206,6 +238,14 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             processWpBtn.classList.remove('hidden');
         }
+    });
+
+    // Share to WhatsApp button
+    wpShareBtn.addEventListener('click', async () => {
+        if (!lastOptimizedBlob) return;
+        wpShareBtn.textContent = 'Opening share...';
+        await shareToWhatsApp(lastOptimizedBlob, lastOptimizedFileName);
+        wpShareBtn.textContent = 'Share to WhatsApp';
     });
 
     // TikTok Downloader Elements
@@ -225,18 +265,15 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadTiktokBtn.disabled = true;
 
         try {
-            // Use TikWM public API (CORS friendly)
             const response = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
             const json = await response.json();
-            
+
             if (json.code !== 0) throw new Error('Could not fetch video. Invalid URL or API limits.');
 
             const videoUrl = json.data.play;
 
             tkStatus.textContent = 'Preparing direct download link...';
-            
-            // TikWM URLs are sometimes CORS blocked for direct Blob fetching,
-            // but we can provide the direct link with the download attribute or open in new tab.
+
             try {
                 const vidResponse = await fetch(videoUrl);
                 const blob = await vidResponse.blob();
@@ -244,7 +281,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 tkDownloadLink.href = blobUrl;
                 tkDownloadLink.download = 'Pics_TikTok.mp4';
             } catch (blobErr) {
-                // Fallback to direct link if CORS blocks the blob fetch
                 console.warn('CORS blocked blob fetch, using direct link fallback');
                 tkDownloadLink.href = videoUrl;
                 tkDownloadLink.target = '_blank';
