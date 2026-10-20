@@ -1,182 +1,274 @@
-:root {
-    --bg-color: #0b0c10;
-    --card-bg: rgba(31, 40, 51, 0.6);
-    --neon-blue: #45a29e;
-    --neon-cyan: #66fcf1;
-    --text-color: #c5c6c7;
-    --border-radius: 16px;
-}
+/* ===== Pix — Dark Glassmorphism Theme ===== */
 
-* {
-    box-sizing: border-box;
+/* ---------- Reset & Base ---------- */
+*, *::before, *::after {
     margin: 0;
     padding: 0;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    font-style: italic; /* Requested by user */
+    box-sizing: border-box;
+}
+
+:root {
+    --bg-primary: #0b0c10;
+    --bg-secondary: #1a1a2e;
+    --glass-bg: rgba(255, 255, 255, 0.04);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-highlight: rgba(255, 255, 255, 0.12);
+    --text-primary: #e6e6ef;
+    --text-secondary: #8888a8;
+    --accent: #7b5cff;
+    --accent-glow: rgba(123, 92, 255, 0.45);
+    --accent-hover: #9a7fff;
+    --success: #34d399;
+    --danger: #f87171;
+    --radius: 16px;
+    --radius-sm: 10px;
+    --transition: 0.25s ease;
+}
+
+html {
+    font-size: 16px;
+    scroll-behavior: smooth;
 }
 
 body {
-    background-color: var(--bg-color);
-    color: var(--text-color);
+    font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
     min-height: 100vh;
     display: flex;
     justify-content: center;
-    align-items: center;
-    background-image: 
-        radial-gradient(circle at 15% 50%, rgba(69, 162, 158, 0.08), transparent 25%),
-        radial-gradient(circle at 85% 30%, rgba(102, 252, 241, 0.08), transparent 25%);
+    align-items: flex-start;
+    padding: 2rem 1rem 4rem;
+    -webkit-font-smoothing: antialiased;
+    background-image:
+        radial-gradient(ellipse 80% 60% at 50% -20%, rgba(123, 92, 255, 0.12), transparent),
+        radial-gradient(ellipse 60% 50% at 80% 110%, rgba(56, 189, 248, 0.08), transparent);
 }
 
-.glass-container {
-    width: 100%;
-    max-width: 800px;
-    padding: 2rem;
-}
-
-header {
-    text-align: center;
-    margin-bottom: 3rem;
-    position: relative;
-}
-
-.install-btn {
-    position: absolute;
-    top: 0;
-    right: 0;
-    padding: 0.5rem 1.2rem;
-    background: var(--neon-cyan);
-    color: var(--bg-color);
-    border: none;
-    border-radius: 20px;
-    font-size: 0.9rem;
-    font-weight: bold;
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    box-shadow: 0 0 12px rgba(102, 252, 241, 0.5);
-    animation: pulse-glow 2s ease-in-out infinite;
-    z-index: 10;
-}
-
-.install-btn:hover {
-    box-shadow: 0 0 20px var(--neon-cyan), 0 0 40px var(--neon-cyan);
-}
-
-@keyframes pulse-glow {
-    0%, 100% { box-shadow: 0 0 12px rgba(102, 252, 241, 0.5); }
-    50% { box-shadow: 0 0 20px rgba(102, 252, 241, 0.8); }
-}
-
-.logo {
-    font-size: 4rem;
-    color: var(--neon-cyan);
-    text-shadow: 0 0 10px rgba(102, 252, 241, 0.5), 0 0 20px rgba(102, 252, 241, 0.3);
-    margin-bottom: 0.5rem;
-    letter-spacing: 2px;
-}
-
-.subtitle {
-    color: var(--neon-blue);
-    font-size: 1.2rem;
-    opacity: 0.8;
-}
-
-main {
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
-}
-
-.card {
-    background: var(--card-bg);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(102, 252, 241, 0.1);
-    border-radius: var(--border-radius);
-    padding: 2rem;
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 12px 40px 0 rgba(102, 252, 241, 0.15);
-    border-color: rgba(102, 252, 241, 0.3);
-}
-
-h2 {
-    color: #fff;
-    margin-bottom: 1rem;
-    font-size: 1.8rem;
-    border-bottom: 1px solid rgba(102, 252, 241, 0.2);
-    padding-bottom: 0.5rem;
-}
-
-p {
-    margin-bottom: 1.5rem;
-    line-height: 1.6;
-}
-
-.input-group {
-    margin-bottom: 1.5rem;
-}
-
-input[type="text"] {
-    width: 100%;
-    padding: 1rem;
-    background: rgba(11, 12, 16, 0.8);
-    border: 1px solid var(--neon-blue);
-    border-radius: 8px;
-    color: #fff;
-    font-size: 1rem;
-    outline: none;
-    transition: border-color 0.3s, box-shadow 0.3s;
-}
-
-input[type="text"]:focus {
-    border-color: var(--neon-cyan);
-    box-shadow: 0 0 8px rgba(102, 252, 241, 0.4);
-}
-
-.neon-btn {
-    display: inline-block;
-    padding: 0.8rem 2rem;
-    background: transparent;
-    color: var(--neon-cyan);
-    border: 2px solid var(--neon-cyan);
-    border-radius: 30px;
-    font-size: 1.1rem;
-    font-weight: bold;
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    text-decoration: none;
-    text-align: center;
-    transition: all 0.3s ease;
-    box-shadow: 0 0 10px rgba(102, 252, 241, 0.2) inset;
-}
-
-.neon-btn:hover {
-    background: var(--neon-cyan);
-    color: var(--bg-color);
-    box-shadow: 0 0 15px var(--neon-cyan), 0 0 30px var(--neon-cyan);
-}
-
-.action-btn {
-    width: 100%;
-}
-
+/* ---------- Utility ---------- */
 .hidden {
     display: none !important;
 }
 
-#wp-preview-container, #tk-result {
-    margin-top: 1.5rem;
-    text-align: center;
+/* ---------- Glass Container ---------- */
+.glass-container {
+    width: 100%;
+    max-width: 520px;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
 }
 
-#wp-status, #tk-status {
-    margin-bottom: 1rem;
-    color: var(--neon-blue);
-    font-weight: bold;
+/* ---------- Header ---------- */
+header {
+    text-align: center;
+    padding: 2rem 1rem 0.5rem;
+    position: relative;
+}
+
+.logo {
+    font-size: 2.6rem;
+    font-weight: 800;
+    letter-spacing: -1px;
+    background: linear-gradient(135deg, var(--accent), #38bdf8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 24px var(--accent-glow));
+}
+
+.subtitle {
+    margin-top: 0.25rem;
+    font-size: 0.92rem;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+}
+
+/* ---------- Install Button ---------- */
+.install-btn {
+    position: absolute;
+    top: 1.5rem;
+    right: 0;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--accent);
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.4rem 0.9rem;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background var(--transition), border-color var(--transition);
+}
+
+.install-btn:hover {
+    background: var(--glass-highlight);
+    border-color: var(--accent);
+}
+
+/* ---------- Cards ---------- */
+.card {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 1.75rem 1.5rem;
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.card:hover {
+    border-color: rgba(123, 92, 255, 0.25);
+    box-shadow: 0 0 32px -8px var(--accent-glow);
+}
+
+.card h2 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+    color: #fff;
+}
+
+.card > p {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 1.25rem;
+}
+
+/* ---------- Input Group ---------- */
+.input-group {
+    margin-bottom: 0.75rem;
+}
+
+.input-group input[type="text"] {
+    width: 100%;
+    padding: 0.7rem 1rem;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    outline: none;
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.input-group input[type="text"]::placeholder {
+    color: var(--text-secondary);
+}
+
+.input-group input[type="text"]:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(123, 92, 255, 0.15);
+}
+
+/* ---------- Neon Buttons ---------- */
+.neon-btn {
+    display: inline-block;
+    padding: 0.65rem 1.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(135deg, var(--accent), #6246ea);
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    text-align: center;
+    text-decoration: none;
+    transition: transform var(--transition), box-shadow var(--transition), opacity var(--transition);
+    box-shadow: 0 4px 20px -4px var(--accent-glow);
+}
+
+.neon-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 28px -4px var(--accent-glow);
+}
+
+.neon-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 12px -4px var(--accent-glow);
+}
+
+.neon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.action-btn {
+    margin-top: 0.75rem;
+}
+
+/* ---------- Status / Progress Text ---------- */
+#wp-status,
+#tk-status {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.3rem;
+    min-height: 1.2em;
+}
+
+#wp-progress {
+    font-size: 0.82rem;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    min-height: 1.2em;
+}
+
+/* ---------- Result Areas ---------- */
+#wp-result,
+#tk-result {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--glass-border);
+}
+
+#wp-result .neon-btn,
+#tk-result .neon-btn {
+    background: linear-gradient(135deg, #059669, #34d399);
+    box-shadow: 0 4px 20px -4px rgba(52, 211, 153, 0.35);
+}
+
+#wp-result .neon-btn:hover,
+#tk-result .neon-btn:hover {
+    box-shadow: 0 6px 28px -4px rgba(52, 211, 153, 0.45);
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 560px) {
+    body {
+        padding: 1rem 0.75rem 3rem;
+    }
+
+    .card {
+        padding: 1.4rem 1.15rem;
+    }
+
+    .logo {
+        font-size: 2.2rem;
+    }
+}
+
+/* ---------- Scrollbar ---------- */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* ---------- Selection ---------- */
+::selection {
+    background: var(--accent);
+    color: #fff;
 }
