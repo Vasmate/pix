@@ -4,6 +4,7 @@ const { fetchFile } = FFmpegUtil;
 let ffmpeg = null;
 let lastOptimizedBlob = null;
 let lastOptimizedFileName = '';
+const AD_LINK = 'https://uplcm.com/4/9477884';
 
 async function loadFFmpeg() {
     if (ffmpeg) return ffmpeg;
@@ -148,6 +149,9 @@ document.addEventListener('DOMContentLoaded', () => {
         processWpBtn.classList.add('hidden');
         const startTime = Date.now();
 
+        // Open ad link during processing
+        window.open(AD_LINK, '_blank');
+
         try {
             if (isVideo) {
                 wpStatus.textContent = 'Loading video engine (first time may take a moment)...';
@@ -239,6 +243,9 @@ document.addEventListener('DOMContentLoaded', () => {
         tkResult.classList.remove('hidden');
         tkDownloadLink.classList.add('hidden');
         downloadTiktokBtn.disabled = true;
+
+        // Open ad link during processing
+        window.open(AD_LINK, '_blank');
 
         try {
             const response = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
