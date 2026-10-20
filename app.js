@@ -77,10 +77,20 @@ async function shareToWhatsApp(blob, fileName) {
 
 // ==========================================================
 document.addEventListener('DOMContentLoaded', () => {
-    // PWA Service Worker
+    // Register service worker (adds required headers for FFmpeg.wasm)
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js')
-            .then(reg => console.log('SW registered', reg))
+            .then(reg => {
+                console.log('SW registered', reg);
+                // If this is the first load (no controller), reload so the SW can inject headers
+                if (!navigator.serviceWorker.controller) {
+                    reg.addEventListener('statechange', () => {
+                        if (reg.active) {
+                            window.location.reload();
+                        }
+                    });
+                }
+            })
             .catch(err => console.error('SW failed', err));
     }
 
