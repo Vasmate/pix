@@ -4,7 +4,73 @@ const { fetchFile } = FFmpegUtil;
 let ffmpeg = null;
 let lastOptimizedBlob = null;
 let lastOptimizedFileName = '';
-const AD_LINK = 'https://uplcm.com/4/9477884';
+const AD_LINK = 'https://uplcm.com/4/12134199';
+
+// ---------- Ad enforcement: must view for at least 7 seconds ----------
+function openAdWithEnforcement(minSeconds = 7) {
+    const adWindow = window.open(AD_LINK, '_blank');
+
+    // If popup was blocked by browser, nothing we can do
+    if (!adWindow) return;
+
+    const startTime = Date.now();
+    const checkInterval = setInterval(() => {
+        try {
+            const elapsed = (Date.now() - startTime) / 1000;
+
+            if (adWindow.closed && elapsed < minSeconds) {
+                clearInterval(checkInterval);
+                const remaining = Math.ceil(minSeconds - elapsed);
+                alert(`Please view the ad for at least ${minSeconds} seconds to support us!\nYou closed it after ${Math.floor(elapsed)}s — reopening now.`);
+                openAdWithEnforcement(minSeconds);
+            } else if (adWindow.closed || elapsed >= minSeconds) {
+                clearInterval(checkInterval);
+            }
+        } catch {
+            clearInterval(checkInterval);
+        }
+    }, 500);
+}
+
+// ---------- Ad cooldown: only show on button clicks once every 12 hours ----------
+const AD_COOLDOWN_KEY = 'pics_ad_last_shown';
+const AD_COOLDOWN_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+function tryShowAdWithCooldown() {
+    const lastShown = parseInt(localStorage.getItem(AD_COOLDOWN_KEY) || '0', 10);
+    const now = Date.now();
+
+    if (now - lastShown >= AD_COOLDOWN_MS) {
+        localStorage.setItem(AD_COOLDOWN_KEY, now.toString());
+        openAdWithEnforcement();
+    }
+}
+
+// ---------- Probe video dimensions using HTML video element ----------
+function probeVideo(file) {
+    return new Promise((resolve, reject) => {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        const url = URL.createObjectURL(file);
+
+        video.onloadedmetadata = () => {
+            URL.revokeObjectURL(url);
+            resolve({
+                width: video.videoWidth,
+                height: video.videoHeight,
+                duration: video.duration,
+                sizeMB: file.size / (1024 * 1024)
+            });
+        };
+
+        video.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error('Failed to load video metadata'));
+        };
+
+        video.src = url;
+    });
+}
 
 async function loadFFmpeg() {
     if (ffmpeg) return ffmpeg;
@@ -13,10 +79,24 @@ async function loadFFmpeg() {
         const wpProgress = document.getElementById('wp-progress');
         wpProgress.textContent = `Processing: ${Math.round(progress * 100)}%`;
     });
-    await ffmpeg.load({
-        coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
-        wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm',
-    });
+
+    // Use multi-threaded build for much faster encoding (requires SharedArrayBuffer)
+    const useMultiThread = typeof SharedArrayBuffer !== 'undefined';
+
+    if (useMultiThread) {
+        await ffmpeg.load({
+            coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.6/dist/umd/ffmpeg-core.js',
+            wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.6/dist/umd/ffmpeg-core.wasm',
+            workerURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.6/dist/umd/ffmpeg-core.worker.js',
+        });
+    } else {
+        // Fallback to single-threaded if SharedArrayBuffer is unavailable
+        await ffmpeg.load({
+            coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
+            wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm',
+        });
+    }
+
     return ffmpeg;
 }
 
@@ -95,6 +175,9 @@ document.addEventListener('DOMContentLoaded', () => {
             .catch(err => console.error('SW failed', err));
     }
 
+    // Open ad 10 seconds after page load (always, no cooldown)
+    setTimeout(() => openAdWithEnforcement(), 10000);
+
     // PWA Install
     let deferredPrompt;
     const installBtn = document.getElementById('install-btn');
@@ -149,14 +232,28 @@ document.addEventListener('DOMContentLoaded', () => {
         processWpBtn.classList.add('hidden');
         const startTime = Date.now();
 
-        // Open ad link during processing
-        window.open(AD_LINK, '_blank');
+        // Show ad only if 12-hour cooldown has passed
+        tryShowAdWithCooldown();
 
         try {
             if (isVideo) {
-                wpStatus.textContent = 'Loading video engine (first time may take a moment)...';
+                // --- Step 1: Probe video to decide processing path ---
+                wpStatus.textContent = 'Analyzing video...';
                 wpProgress.textContent = '';
 
+                let meta;
+                try {
+                    meta = await probeVideo(selectedFile);
+                } catch {
+                    // Fallback: if probing fails, assume re-encode is needed
+                    meta = { width: 9999, height: 9999, duration: 0, sizeMB: selectedFile.size / (1024 * 1024) };
+                }
+
+                const needsResize = meta.height > 720;
+                const needsCompress = meta.sizeMB > 16;
+                const needsReencode = needsResize || needsCompress;
+
+                wpStatus.textContent = 'Loading video engine (first time may take a moment)...';
                 const ff = await loadFFmpeg();
 
                 wpStatus.textContent = 'Reading file...';
@@ -164,19 +261,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 const outputName = 'output.mp4';
                 await ff.writeFile(inputName, await fetchFile(selectedFile));
 
-                wpStatus.textContent = 'Optimizing for WhatsApp...';
-                await ff.exec([
-                    '-i', inputName,
-                    '-vf', "scale=-2:'min(720,ih)'",
-                    '-c:v', 'libx264',
-                    '-b:v', '1500k',
-                    '-maxrate', '1500k',
-                    '-bufsize', '3000k',
-                    '-preset', 'ultrafast',
-                    '-c:a', 'aac',
-                    '-b:a', '128k',
-                    outputName
-                ]);
+                if (needsReencode) {
+                    // --- Full re-encode (only when actually needed) ---
+                    const reason = needsResize && needsCompress
+                        ? 'Resizing & compressing'
+                        : needsResize ? 'Resizing to 720p' : 'Compressing to fit WhatsApp limit';
+                    wpStatus.textContent = `${reason} for WhatsApp...`;
+
+                    await ff.exec([
+                        '-i', inputName,
+                        '-vf', "scale=-2:'min(720,ih)'",
+                        '-c:v', 'libx264',
+                        '-b:v', '1500k',
+                        '-maxrate', '1500k',
+                        '-bufsize', '3000k',
+                        '-preset', 'ultrafast',
+                        '-c:a', 'aac',
+                        '-b:a', '128k',
+                        '-movflags', '+faststart',
+                        outputName
+                    ]);
+                } else {
+                    // --- Fast remux: no re-encoding needed! ---
+                    wpStatus.textContent = 'Repackaging for WhatsApp (fast mode)...';
+                    wpProgress.textContent = '';
+
+                    await ff.exec([
+                        '-i', inputName,
+                        '-c', 'copy',
+                        '-movflags', '+faststart',
+                        outputName
+                    ]);
+                }
 
                 const data = await ff.readFile(outputName);
                 lastOptimizedBlob = new Blob([data.buffer], { type: 'video/mp4' });
@@ -185,8 +301,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                 const originalMB = (selectedFile.size / (1024 * 1024)).toFixed(1);
                 const newMB = (lastOptimizedBlob.size / (1024 * 1024)).toFixed(1);
+                const mode = needsReencode ? 'compressed' : 'repackaged (fast)';
 
-                wpStatus.textContent = `Video optimized in ${elapsed}s! ${originalMB}MB → ${newMB}MB`;
+                wpStatus.textContent = `Video ${mode} in ${elapsed}s! ${originalMB}MB → ${newMB}MB`;
                 wpProgress.textContent = '';
                 wpDownloadLink.href = URL.createObjectURL(lastOptimizedBlob);
                 wpDownloadLink.download = lastOptimizedFileName;
@@ -244,8 +361,8 @@ document.addEventListener('DOMContentLoaded', () => {
         tkDownloadLink.classList.add('hidden');
         downloadTiktokBtn.disabled = true;
 
-        // Open ad link during processing
-        window.open(AD_LINK, '_blank');
+        // Show ad only if 12-hour cooldown has passed
+        tryShowAdWithCooldown();
 
         try {
             const response = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
