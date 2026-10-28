@@ -6,6 +6,80 @@ let lastOptimizedBlob = null;
 let lastOptimizedFileName = '';
 const AD_LINK = 'https://uplcm.com/4/12134199';
 
+// ---------- Ad modal overlay ----------
+function createAdModal() {
+    // Only create once
+    if (document.getElementById('ad-modal-overlay')) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'ad-modal-overlay';
+    overlay.style.cssText = `
+        position: fixed; inset: 0; z-index: 99999;
+        background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+        display: flex; justify-content: center; align-items: center;
+        animation: fadeIn 0.3s ease-out;
+    `;
+
+    const box = document.createElement('div');
+    box.style.cssText = `
+        background: #fff; border-radius: 20px; padding: 2rem 1.75rem;
+        text-align: center; max-width: 340px; width: 90%;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        animation: fadeInUp 0.4s ease-out;
+    `;
+
+    const title = document.createElement('h3');
+    title.textContent = 'Support Us!';
+    title.style.cssText = 'margin-bottom: 0.5rem; font-size: 1.2rem; color: #1a1a2e;';
+
+    const msg = document.createElement('p');
+    msg.id = 'ad-modal-msg';
+    msg.style.cssText = 'font-size: 0.9rem; color: #6b7280; margin-bottom: 1.25rem; line-height: 1.5;';
+
+    const btn = document.createElement('button');
+    btn.id = 'ad-modal-btn';
+    btn.textContent = 'Go Back';
+    btn.style.cssText = `
+        padding: 0.75rem 2rem; font-size: 0.95rem; font-weight: 600;
+        color: #fff; background: linear-gradient(135deg, #6366f1, #8b5cf6);
+        border: none; border-radius: 12px; cursor: pointer;
+        box-shadow: 0 4px 16px rgba(99,102,241,0.3);
+        transition: all 0.3s ease; width: 100%;
+    `;
+    btn.onmouseenter = () => btn.style.transform = 'translateY(-2px) scale(1.02)';
+    btn.onmouseleave = () => btn.style.transform = '';
+
+    box.appendChild(title);
+    box.appendChild(msg);
+    box.appendChild(btn);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+}
+
+function showAdModal(secondsViewed, minSeconds) {
+    createAdModal();
+    const overlay = document.getElementById('ad-modal-overlay');
+    const msg = document.getElementById('ad-modal-msg');
+    const btn = document.getElementById('ad-modal-btn');
+
+    msg.textContent = `Please view the ad for at least ${minSeconds} seconds to support us. You closed it after ${Math.floor(secondsViewed)}s.`;
+
+    overlay.style.display = 'flex';
+
+    // Replace button handler each time
+    const newBtn = btn.cloneNode(true);
+    newBtn.onmouseenter = () => newBtn.style.transform = 'translateY(-2px) scale(1.02)';
+    newBtn.onmouseleave = () => newBtn.style.transform = '';
+    btn.parentNode.replaceChild(newBtn, btn);
+
+    return new Promise((resolve) => {
+        newBtn.addEventListener('click', () => {
+            overlay.style.display = 'none';
+            resolve();
+        }, { once: true });
+    });
+}
+
 // ---------- Ad enforcement: must view for at least 7 seconds ----------
 function openAdWithEnforcement(minSeconds = 7) {
     const adWindow = window.open(AD_LINK, '_blank');
@@ -20,9 +94,10 @@ function openAdWithEnforcement(minSeconds = 7) {
 
             if (adWindow.closed && elapsed < minSeconds) {
                 clearInterval(checkInterval);
-                const remaining = Math.ceil(minSeconds - elapsed);
-                alert(`Please view the ad for at least ${minSeconds} seconds to support us!\nYou closed it after ${Math.floor(elapsed)}s — reopening now.`);
-                openAdWithEnforcement(minSeconds);
+                // Show modal with only "Go Back" button, then reopen with full timer reset
+                showAdModal(elapsed, minSeconds).then(() => {
+                    openAdWithEnforcement(minSeconds);
+                });
             } else if (adWindow.closed || elapsed >= minSeconds) {
                 clearInterval(checkInterval);
             }
@@ -175,8 +250,17 @@ document.addEventListener('DOMContentLoaded', () => {
             .catch(err => console.error('SW failed', err));
     }
 
-    // Open ad 10 seconds after page load (always, no cooldown)
+    // Open ad 10 seconds after page load (every fresh open, not on minimize/restore)
+    // DOMContentLoaded only fires on fresh page loads, not on visibility changes
     setTimeout(() => openAdWithEnforcement(), 10000);
+
+    // Also handle PWA being restored from bfcache (back/forward navigation)
+    window.addEventListener('pageshow', (e) => {
+        if (e.persisted) {
+            // Page was restored from bfcache — treat as a fresh open
+            setTimeout(() => openAdWithEnforcement(), 10000);
+        }
+    });
 
     // PWA Install
     let deferredPrompt;
